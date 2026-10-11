@@ -31,7 +31,7 @@ Asi que el reparto real queda:
     esta rutina    todo lo de arriba, sola, cada dia
     El usuario      mantener la sesion viva y aprobar. Dos gestos.
 
-Pensado para lanzarse desde el Programador de tareas de Windows. Escribe un
+Se puede lanzar a mano o con el programador del sistema operativo. Escribe un
 resumen en `datos/dia.log` y termina con codigo 0 aunque una parte falle: que
 una fuente se caiga no puede impedir que el resto del dia ocurra.
 """

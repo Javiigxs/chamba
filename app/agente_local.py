@@ -45,7 +45,6 @@ from __future__ import annotations
 import argparse
 import json
 import os
-import subprocess
 import sys
 import time
 from datetime import datetime
@@ -59,39 +58,11 @@ except (AttributeError, ValueError):
     pass
 
 from nucleo import DATOS                       # noqa: E402
+from navegador import abrir_en_chrome          # noqa: E402
 
 LATIDO = DATOS / "agente_local.json"
 INTERVALO = 180          # tres minutos: rapido para un si desde el movil, y
                          # suave para una maquina que ademas se usa
-
-# Donde suele estar Chrome en Windows. Se prueban en orden y se cae a
-# `webbrowser`, que abre el navegador por defecto: peor, pero nunca falla.
-CHROMES = [
-    r"C:\Program Files\Google\Chrome\Application\chrome.exe",
-    r"C:\Program Files (x86)\Google\Chrome\Application\chrome.exe",
-    os.path.expandvars(r"%LOCALAPPDATA%\Google\Chrome\Application\chrome.exe"),
-]
-
-
-def abrir_en_chrome(url: str) -> str:
-    """Abre la URL en Chrome. Devuelve como lo consiguio, o el error.
-
-    Se prefiere Chrome explicitamente --y no el navegador por defecto-- porque
-    la sesion del usuario (OCC, LinkedIn, Gmail) esta EN Chrome. Abrir la
-    misma URL en otro navegador da una pantalla de inicio de sesion, que es
-    justo el gesto que este sistema existe para ahorrar.
-    """
-    for ruta in CHROMES:
-        if ruta and Path(ruta).exists():
-            try:
-                subprocess.Popen([ruta, url],
-                                 creationflags=getattr(subprocess, "DETACHED_PROCESS", 0))
-                return "chrome"
-            except OSError as ex:
-                return f"error al lanzar Chrome: {ex}"
-    import webbrowser
-    return "navegador por defecto" if webbrowser.open(url) else "no se pudo abrir"
-
 
 def _latir(resumen: dict) -> None:
     """Deja constancia de que este proceso paso por aqui y que hizo."""

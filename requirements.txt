@@ -1,9 +1,9 @@
 # =============================================================================
 #  ULTRA CHAMBA — ciberseguridad · dependencias
 #
-#  Probado con Python 3.12.3 en Windows, sobre un `.venv` propio de esta
-#  carpeta. Las versiones son las que se instalaron y se ejercitaron aqui:
-#  no estan copiadas de otro proyecto.
+#  Probado con Python 3.12.3 en Windows y 3.14.4 en macOS Apple Silicon,
+#  sobre un `.venv` propio de esta carpeta. En macOS se puede instalar con
+#  ./instalar-macos.command; no hace falta compilar lxml manualmente.
 #
 #      python -m venv .venv
 #      .venv\Scripts\activate          (Windows)

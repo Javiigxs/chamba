@@ -72,10 +72,11 @@ candidaturas.
 
 **Imprescindibles**
 
-- **Python 3.12** (probado en 3.12.3).
-- **Windows 10 u 11** (es donde se probó). El núcleo es Python estándar y
-  *debería* funcionar en Linux y macOS, pero **no se ha probado ahí**, y allí
-  te quedas sin los `.bat` y sin la apertura automática de Chrome.
+- **Python 3.12 o posterior**. Verificado con 3.12.3 en Windows y 3.14.4 en
+  macOS con Apple Silicon.
+- **macOS o Windows 10/11**. macOS incluye instalador y lanzadores `.command`;
+  Windows conserva los `.bat`. El núcleo también es portable a Linux, aunque
+  no se ha probado allí.
 - Un navegador para abrir el panel.
 - Conexión a internet para recolectar (peticiones GET a fuentes públicas).
 
@@ -83,7 +84,7 @@ candidaturas.
 
 | Qué | Para qué | Si falta |
 |---|---|---|
-| **Google Chrome** | `app/agente_local.py` lo abre para ejecutar lo que apruebas, y el flujo de fichas de OCC usa una pestaña tuya | Busca Chrome en tres rutas típicas de Windows; si no lo encuentra, usa tu navegador por defecto |
+| **Google Chrome** | `app/agente_local.py` lo abre para ejecutar lo que apruebas, y el flujo de fichas de OCC usa una pestaña tuya | En macOS usa Launch Services (`open -a`), incluyendo `/Applications` y `~/Applications`; en Windows busca sus rutas habituales. Si falta, intenta el navegador por defecto |
 | **Cuenta de Google propia + credenciales OAuth** | Borradores en tu Gmail, seguimiento de respuestas, copia a tu Drive | Esos módulos avisan y no hacen nada; el resto sigue igual |
 | **`requirements-opcional.txt`** | Las librerías de Google que necesitan Gmail y Drive | Sin instalarlas, esos módulos fallan con `ImportError` al usarlos |
 | **Clave de la API de Indeed** | Activa esa fuente (`INDEED_API_KEY`) | La fuente se desactiva sola y lo dice por el log |
@@ -97,14 +98,52 @@ candidaturas.
 
 ## 4. Instalación
 
+### macOS
+
+Instala **Python 3.12 o posterior** si aún no lo tienes. Desde Terminal, entra
+en la carpeta del proyecto y ejecuta:
+
 ```bash
-python -m venv .venv
+./instalar-macos.command
+./panel.command
+```
+
+También puedes abrir estos archivos con doble clic en Finder. El instalador
+crea `.venv`, instala las dependencias y comprueba que se puedan importar. El
+panel abre el navegador en `http://127.0.0.1:8800`; se detiene con **Ctrl+C** en
+su ventana de Terminal. No necesitas activar el entorno virtual para usar
+los lanzadores.
+
+Los lanzadores funcionan desde cualquier carpeta, incluso si la ruta del
+proyecto contiene espacios. Prefieren `.venv/bin/python` y, si no existe,
+buscan un Python compatible en el PATH y las ubicaciones habituales de macOS.
+Puedes elegir otro al instalar con `PYTHON=/ruta/a/python3 ./instalar-macos.command`.
+
+Si copiaste el proyecto desde Windows, **no reutilices su `.venv`**: renombra
+esa carpeta y ejecuta el instalador para crear el entorno del Mac. Si tu copia
+perdió los permisos de ejecución, restáuralos con:
+
+```bash
+chmod +x instalar-macos.command panel.command ciclo-diario.command agente-en-casa.command
+```
+
+Para añadir las integraciones opcionales de Google:
+
+```bash
+./instalar-macos.command --con-google
+```
+
+### Instalación manual / Windows
+
+```bash
 # Windows
+python -m venv .venv
 .venv\Scripts\activate
 # Linux / macOS
+python3 -m venv .venv
 source .venv/bin/activate
 
-pip install -r requirements.txt
+python -m pip install -r requirements.txt
 ```
 
 **Solo si vas a usar Gmail o Google Drive**, instala además las librerías de
@@ -152,6 +191,26 @@ nada. Cada envío queda registrado en `app/datos/envios.log`.
 
 ## 6. Ejecución local
 
+En macOS, los accesos de la raíz usan el entorno virtual automáticamente:
+
+```bash
+./panel.command                         # panel local y navegador
+./panel.command --puerto 8811            # puerto alternativo
+./panel.command --sin-abrir              # solo servidor, sin abrir navegador
+./ciclo-diario.command                   # ciclo del día
+./ciclo-diario.command --rapido           # omite la recolección larga
+./agente-en-casa.command                 # panel móvil en red + agente
+./agente-en-casa.command --puerto 8811 --cada 60
+```
+
+`agente-en-casa.command` mantiene ambos procesos en una ventana de Terminal.
+**Ctrl+C** o cerrar esa ventana detiene el panel y su agente. Si el puerto
+está ocupado, no inicia el agente; si el agente termina, el panel también se
+detiene con un error. Puedes fijar el token con `--token TU_TOKEN`.
+
+Para usar directamente los scripts Python, activa primero el entorno
+(`source .venv/bin/activate` en macOS):
+
 ```bash
 # El panel (lo más habitual)
 python app/servidor.py                 # http://127.0.0.1:8800
@@ -173,17 +232,22 @@ En Windows hay dos atajos: `ciclo-diario.bat` (el ciclo del día) y
 `agente-en-casa.bat` (panel en red + agente que ejecuta lo aprobado). Los dos
 prefieren el Python del `.venv` del proyecto y, si no existe, caen al del PATH.
 
-> **`agente-en-casa.bat` saca el panel a la red.** Úsalo solo en una **red de
+> **`agente-en-casa.command` y `agente-en-casa.bat` sacan el panel a la red.** Úsalos solo en una **red de
 > confianza** o detrás de una **VPN privada** — `app/servidor.py` sugiere
 > Tailscale, para que solo lleguen tus dispositivos. **Nunca en una wifi
 > pública.** El token es obligatorio al salir a la red y el servidor lo imprime
 > al arrancar, pero es la cerradura mínima, no cifrado.
 
+En el teléfono, abre la dirección `/movil?t=...` que muestra el servidor,
+sustituyendo el host por la IP local o de Tailscale de tu Mac. El equipo debe
+estar encendido y despierto para atender el panel y ejecutar aprobaciones.
+
 ### Este proyecto no programa nada por su cuenta
 
-No registra tareas en el Programador de tareas de Windows, no se añade al inicio
-de sesión y no deja nada corriendo en segundo plano: los `.bat` se ejecutan sólo
-cuando tú los lanzas. Si quieres que el ciclo diario corra solo, regístralo tú:
+No registra tareas en `launchd` de macOS ni en el Programador de tareas de
+Windows, ni se añade al inicio de sesión: los `.command` y `.bat` se ejecutan
+solo cuando tú los lanzas. En Windows, si quieres que el ciclo diario corra
+solo, regístralo tú:
 
 ```bat
 schtasks /create /tn "ULTRA CHAMBA - ciclo diario" ^
@@ -204,8 +268,8 @@ corras una recolección.
 
 ## 7. Pruebas
 
-Los `app/test_*.py` **son scripts con `main()`, no tests de pytest**: `pytest`
-los recoge como 0 tests y sale con código 5. Se ejecutan directamente:
+Las pruebas se ejecutan directamente con Python. `test_macos.py` usa
+`unittest`; las demás son scripts con sus propias comprobaciones:
 
 ```bash
 python app/test_modulos.py     # clasificador de dominio, geo y experiencia
@@ -214,7 +278,13 @@ python app/test_fantasma.py    # detector de vacantes fantasma (crea la base)
 python app/test_formacion.py   # elegibilidad de cursos (crea la base)
 python app/test_indeed.py      # sin INDEED_API_KEY dice «NO EJECUTADO» y sale con 0;
                                # CON clave hace peticiones REALES a Indeed
+python app/test_macos.py       # lanzadores, Chrome, HTTP, token y cierre del agente
 ```
+
+`test_macos.py` usa copias temporales, una base vacía y un agente inerte. No
+abre navegadores ni ejecuta aprobaciones reales. Prueba rutas con espacios,
+arranque desde otra carpeta, prioridad de `.venv`, puerto ocupado y cierre
+por señales. La apertura de navegadores se comprueba con dobles de prueba.
 
 Comprobación estática sin instalar nada extra:
 

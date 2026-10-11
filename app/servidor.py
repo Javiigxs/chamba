@@ -757,9 +757,26 @@ class Manejador(BaseHTTPRequestHandler):
         pass
 
 
-if __name__ == "__main__":
+class ServidorPanel(HTTPServer):
+    """Vigila al agente opcional para no dejar el panel prometiendo ejecución."""
+    agente = None
+
+    def service_actions(self):
+        if self.agente is not None and self.agente.poll() is not None:
+            raise RuntimeError(f"El agente local terminó (código {self.agente.returncode}).")
+
+
+def main(argv=None) -> int:
     import argparse
+    import os
     import secrets
+    import signal
+    import subprocess
+    import sys
+    import webbrowser
+    from urllib.parse import quote
+
+    global TOKEN_ACCESO
 
     ap = argparse.ArgumentParser(description="Panel de ULTRA CHAMBA")
     ap.add_argument("--host", default="127.0.0.1",
@@ -767,21 +784,81 @@ if __name__ == "__main__":
     ap.add_argument("--puerto", type=int, default=PUERTO)
     ap.add_argument("--token", default="",
                     help="clave de acceso; se genera una si no se da")
-    args = ap.parse_args()
+    ap.add_argument("--abrir", action="store_true", help="abre el panel en el navegador")
+    ap.add_argument("--sin-abrir", action="store_false", dest="abrir",
+                    help="deja el panel en consola sin abrir el navegador")
+    ap.add_argument("--agente-local", action="store_true",
+                    help="ejecuta también el agente; ambos se detienen al salir")
+    ap.add_argument("--cada", type=int, default=180,
+                    help="intervalo del agente local en segundos (por defecto: 180)")
+    args = ap.parse_args(argv)
+    if args.cada <= 0:
+        ap.error("--cada debe ser mayor que cero")
 
-    if args.host not in ("127.0.0.1", "localhost"):
-        # Salir a la red sin cerradura no es una opcion que se ofrezca: si no
-        # se da token, se genera y se imprime. Nunca se arranca abierto.
-        TOKEN_ACCESO = args.token or secrets.token_urlsafe(12)
-        print(f"Panel EN LA RED: http://{args.host}:{args.puerto}/movil?t={TOKEN_ACCESO}")
-        print("  Ese enlace es la llave: abrelo en el telefono y guardalo.")
-        print("  Recomendado: Tailscale, para que solo lleguen tus dispositivos.")
-    else:
-        print(f"Panel en http://127.0.0.1:{args.puerto}")
-        print(f"  Vista movil: http://127.0.0.1:{args.puerto}/movil")
+    en_red = args.host not in ("127.0.0.1", "localhost")
+    TOKEN_ACCESO = args.token or (secrets.token_urlsafe(12) if en_red else "")
+    sufijo = f"?t={quote(TOKEN_ACCESO, safe='')}" if TOKEN_ACCESO else ""
+    agente = None
+    anteriores = {}
 
-    f = facetas()["resumen"]
-    print(f"  {f['total']} vacantes vivas - {f['monterrey']} en Monterrey - "
-          f"{f['aplicadas']} aplicadas - {f['historicas']} en el historial")
-    print("  Ctrl+C para detener")
-    HTTPServer((args.host, args.puerto), Manejador).serve_forever()
+    def detener(signum, frame):
+        raise KeyboardInterrupt
+
+    try:
+        # Reservar el puerto ANTES de iniciar el agente o abrir el navegador.
+        # Si ya está ocupado, no queda otro agente ejecutando aprobaciones.
+        with ServidorPanel((args.host, args.puerto), Manejador) as servidor:
+            for nombre in ("SIGTERM", "SIGHUP"):
+                sig = getattr(signal, nombre, None)
+                if sig is not None:
+                    anteriores[sig] = signal.signal(sig, detener)
+            puerto = servidor.server_port
+            host_local = "127.0.0.1" if args.host == "0.0.0.0" else args.host
+            # La vista móvil conserva el token y lo envía en sus peticiones.
+            pagina = "/movil" if TOKEN_ACCESO else "/"
+            url_local = f"http://{host_local}:{puerto}{pagina}{sufijo}"
+            print(f"Panel en {url_local}")
+            print(f"  Vista móvil: http://{host_local}:{puerto}/movil{sufijo}")
+            if en_red:
+                print("  Panel EN LA RED: sustituye el host por la IP de este equipo en el teléfono.")
+                print("  El enlace con token es la llave; guárdalo. Recomendado: Tailscale.")
+
+            f = facetas()["resumen"]
+            print(f"  {f['total']} vacantes vivas - {f['monterrey']} en Monterrey - "
+                  f"{f['aplicadas']} aplicadas - {f['historicas']} en el historial")
+            if args.agente_local:
+                agente = subprocess.Popen(
+                    [sys.executable, "-X", "utf8", "-u", str(RAIZ / "agente_local.py"),
+                     "--cada", str(args.cada)],
+                    cwd=RAIZ.parent, start_new_session=os.name != "nt")
+                servidor.agente = agente
+                print(f"  Agente local iniciado (PID {agente.pid}).")
+            print("  Ctrl+C para detener el panel y su agente.", flush=True)
+            if args.abrir:
+                try:
+                    if not webbrowser.open(url_local):
+                        print("  Abre el enlace manualmente en tu navegador.")
+                except (OSError, webbrowser.Error):
+                    print("  Abre el enlace manualmente en tu navegador.")
+            servidor.serve_forever()
+    except KeyboardInterrupt:
+        print("\nPanel detenido.")
+    except (OSError, RuntimeError) as ex:
+        print(f"No se pudo mantener el panel en marcha: {ex}", file=sys.stderr)
+        return 1
+    finally:
+        if agente is not None:
+            if agente.poll() is None:
+                agente.terminate()
+            try:
+                agente.wait(timeout=5)
+            except subprocess.TimeoutExpired:
+                agente.kill()
+                agente.wait()
+        for sig, anterior in anteriores.items():
+            signal.signal(sig, anterior)
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
